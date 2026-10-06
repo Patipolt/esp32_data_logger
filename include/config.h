@@ -13,22 +13,21 @@
 #define SCLK_PIN        GPIO_NUM_36     // CLK
 #define CS_PIN          GPIO_NUM_38     // DAT3
 #define MOUNT_POINT     "/sdcard"
-#define BUFFER_SIZE     1024
+#define BUFFER_SIZE     (32 * 1024)       // Batch SD writes to reduce per-sample overhead
+#define SDCARD_USE_PSRAM false             // false uses internal RAM for both buffers
 #define MAX_ENTRY_SIZE  64
 #define SDCARD_SPI_HOST SPI2_HOST
 
 // Configurations for WiFi hotspot, web page and UDP streaming
 #define WIFI_AP_SSID    "IMU_Logger"
-#define WIFI_AP_PASS    "12345678"          // 8-63 characters, empty for an open network
+#define WIFI_AP_PASS    NULL          // 8-63 characters, empty for an open network
 #define UDP_TARGET_IP   "192.168.4.255"     // broadcast on the hotspot subnet
 #define UDP_TARGET_PORT 5005
 
 // Configurations for RGB_LED class
 #define RGB_LED_PIN     GPIO_NUM_48
 
-// Configurations for UART
-#define UART_NUM       UART_NUM_1
-#define UART_TX_PIN    GPIO_NUM_15
-#define UART_RX_PIN    GPIO_NUM_16
+// Configurations for Ticker class
+#define TICKER_HZ       100                // 100Hz for logging IMU data
 
 #endif // CONFIG_H_

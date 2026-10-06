@@ -7,6 +7,7 @@ static const char *TAG = "WIFI_MANAGER";
 #define BIT_GOT_IP  BIT0
 
 WIFI_MANAGER::WIFI_MANAGER() {
+    // Create an event group for Wi-Fi events
     m_events = xEventGroupCreate();
 }
 
@@ -28,15 +29,19 @@ esp_err_t WIFI_MANAGER::init() {
         return err;
     }
 
+    // Initialize the TCP/IP stack and Wi-Fi driver
     err = esp_netif_init();
     if (err != ESP_OK) return err;
 
+    // Create the default event loop
     err = esp_event_loop_create_default();
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) return err;
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) return err; // ESP_ERR_INVALID_STATE means the default loop already exists, which is fine
 
+    // Create default Wi-Fi interfaces
     m_staNetif = esp_netif_create_default_wifi_sta();
     m_apNetif = esp_netif_create_default_wifi_ap();
 
+    // Initialize Wi-Fi driver
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     err = esp_wifi_init(&cfg);
     if (err != ESP_OK) {
@@ -44,6 +49,7 @@ esp_err_t WIFI_MANAGER::init() {
         return err;
     }
 
+    // Register event handlers for Wi-Fi and IP events
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &eventHandler, this, nullptr);
     esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &eventHandler, this, nullptr);
 
@@ -52,6 +58,7 @@ esp_err_t WIFI_MANAGER::init() {
 }
 
 esp_err_t WIFI_MANAGER::startAP(const char *ssid, const char *password, uint8_t channel, uint8_t maxConnections) {
+    // Validate SSID and password
     size_t passLen = password ? strlen(password) : 0;
     if (!ssid || strlen(ssid) == 0 || strlen(ssid) > 32) {
         ESP_LOGE(TAG, "Invalid SSID");
@@ -62,10 +69,11 @@ esp_err_t WIFI_MANAGER::startAP(const char *ssid, const char *password, uint8_t 
         return ESP_ERR_INVALID_ARG;
     }
 
-    stop();
-    esp_err_t err = init();
+    stop();     // stop any existing Wi-Fi operation (STA or AP)
+    esp_err_t err = init();     // initialize Wi-Fi if not already done
     if (err != ESP_OK) return err;
 
+    // Configure Wi-Fi AP settings
     wifi_config_t conf = {};
     strncpy((char *)conf.ap.ssid, ssid, sizeof(conf.ap.ssid));
     conf.ap.ssid_len = strlen(ssid);
@@ -78,6 +86,7 @@ esp_err_t WIFI_MANAGER::startAP(const char *ssid, const char *password, uint8_t 
         conf.ap.authmode = WIFI_AUTH_WPA2_PSK;
     }
 
+    // Start Wi-Fi in AP mode
     err = esp_wifi_set_mode(WIFI_MODE_AP);
     if (err == ESP_OK) err = esp_wifi_set_config(WIFI_IF_AP, &conf);
     if (err == ESP_OK) err = esp_wifi_start();
@@ -87,6 +96,7 @@ esp_err_t WIFI_MANAGER::startAP(const char *ssid, const char *password, uint8_t 
     }
     esp_wifi_set_ps(WIFI_PS_NONE);  // lower latency for streaming
 
+    // Get the IP address of the AP interface
     esp_netif_ip_info_t ip;
     if (esp_netif_get_ip_info(m_apNetif, &ip) == ESP_OK) {
         snprintf(m_ip, sizeof(m_ip), IPSTR, IP2STR(&ip.ip));
@@ -97,6 +107,7 @@ esp_err_t WIFI_MANAGER::startAP(const char *ssid, const char *password, uint8_t 
 }
 
 esp_err_t WIFI_MANAGER::startSTA(const char *ssid, const char *password, uint32_t timeoutMs) {
+    // Validate SSID and password
     if (!ssid || strlen(ssid) == 0 || strlen(ssid) > 32) {
         ESP_LOGE(TAG, "Invalid SSID");
         return ESP_ERR_INVALID_ARG;
@@ -107,10 +118,11 @@ esp_err_t WIFI_MANAGER::startSTA(const char *ssid, const char *password, uint32_
         return ESP_ERR_INVALID_ARG;
     }
 
-    stop();
-    esp_err_t err = init();
+    stop();     // stop any existing Wi-Fi operation (STA or AP)
+    esp_err_t err = init();     // initialize Wi-Fi if not already done
     if (err != ESP_OK) return err;
 
+    // Configure Wi-Fi STA settings
     wifi_config_t conf = {};
     strncpy((char *)conf.sta.ssid, ssid, sizeof(conf.sta.ssid));
     if (passLen > 0) {
@@ -122,6 +134,7 @@ esp_err_t WIFI_MANAGER::startSTA(const char *ssid, const char *password, uint32_
     conf.sta.pmf_cfg.capable = true;
     conf.sta.pmf_cfg.required = false;
 
+    // Start Wi-Fi in STA mode
     m_staActive = true;
     err = esp_wifi_set_mode(WIFI_MODE_STA);
     if (err == ESP_OK) err = esp_wifi_set_config(WIFI_IF_STA, &conf);
@@ -131,9 +144,11 @@ esp_err_t WIFI_MANAGER::startSTA(const char *ssid, const char *password, uint32_
         ESP_LOGE(TAG, "Failed to start STA: %s", esp_err_to_name(err));
         return err;
     }
-    esp_wifi_set_ps(WIFI_PS_NONE);
+    esp_wifi_set_ps(WIFI_PS_NONE);  // lower latency for streaming
 
     ESP_LOGI(TAG, "Connecting to '%s'...", ssid);
+    
+    // Wait for IP address or timeout
     EventBits_t bits = xEventGroupWaitBits(m_events, BIT_GOT_IP, pdFALSE, pdFALSE, pdMS_TO_TICKS(timeoutMs));
     if (bits & BIT_GOT_IP) {
         return ESP_OK;

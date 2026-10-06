@@ -1,90 +1,84 @@
 #include "esp_ticker.h"
 
-static const char *TAG = "ESP_TICKER";
+Ticker::Ticker()
+    : event_group_(nullptr), timer_(nullptr), bit_(BIT0), running_(false) {}
 
-EventGroupHandle_t event_group;
-esp_timer_handle_t periodic_timer;
-
-
-ESP_TICKER::ESP_TICKER() {
-    ticker_running = false;
-}
-
-ESP_TICKER::~ESP_TICKER() {
-    if (this->ticker_running) {
-        this->stop();
+Ticker::~Ticker() {
+    stop();
+    if (timer_) {
+        esp_timer_delete(timer_);
+        timer_ = nullptr;
     }
-    if (event_group != nullptr) {
-        vEventGroupDelete(event_group);
-        event_group = nullptr;
-    }
-    if (periodic_timer != nullptr) {
-        esp_timer_delete(periodic_timer);
-        periodic_timer = nullptr;
+    if (event_group_) {
+        vEventGroupDelete(event_group_);
+        event_group_ = nullptr;
     }
 }
 
-void ESP_TICKER::periodic_timer_callback(void* arg) {
-    xEventGroupSetBits(event_group, TASK_FLAG);
+void Ticker::start(float hz) {
+    if (hz <= 0.0f) {
+        ESP_LOGE(TAG, "Invalid Hz: %f", (double)hz);
+        return;
+    }
+    const double period_us_d = 1000000.0 / (double)hz;
+    startPeriodUs((uint64_t)period_us_d);
 }
 
-void ESP_TICKER::start(float Hz)
-{
-    // Ensure event_group and periodic_timer are initialized only once
-    if (event_group == nullptr) {
-        /* Initialize the event group */
-        event_group = xEventGroupCreate();
-        if (event_group == NULL) {
+void Ticker::startPeriodUs(uint64_t us) {
+    if (running_) {
+        ESP_LOGW(TAG, "Ticker already running, stopping first");
+        stop();
+    }
+
+    if (!event_group_) {
+        event_group_ = xEventGroupCreate();
+        if (!event_group_) {
             ESP_LOGE(TAG, "Failed to create event group");
             return;
         }
     }
 
-    /* Configure the high-resolution timer */
-    const esp_timer_create_args_t periodic_timer_args = {
-        .callback = &ESP_TICKER::periodic_timer_callback,
-        .arg = this,  // Pass the ESP_TICKER instance
+    esp_timer_create_args_t args = {
+        .callback = &Ticker::timerCallback,
+        .arg = this,
         .dispatch_method = ESP_TIMER_TASK,
-        .name = "periodic_timer",
-        .skip_unhandled_events = false,
+        .name = "esp_ticker",
+        .skip_unhandled_events = true,
     };
 
-    // Create the periodic timer
-    esp_err_t ret = esp_timer_create(&periodic_timer_args, &periodic_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create periodic timer, error: %s", esp_err_to_name(ret));
-    } else {
-        ESP_LOGI(TAG, "Periodic timer created successfully");
-    }
-
-    // Start the periodic timer with microseconds interval
-    ret = esp_timer_start_periodic(periodic_timer, (1000 / Hz)*1000);  // microseconds
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to start periodic timer");
+    if (esp_timer_create(&args, &timer_) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create esp_timer");
         return;
     }
-    this->ticker_running = true;
-    ESP_LOGI(TAG, "Ticker started with frequency: %.2f Hz", Hz);
+
+    if (esp_timer_start_periodic(timer_, us) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start esp_timer");
+        return;
+    }
+
+    running_ = true;
+    ESP_LOGI(TAG, "Ticker started, period = %llu us", (unsigned long long)us);
 }
 
-void ESP_TICKER::stop(void)
-{
-    if (!this->ticker_running) {
-        ESP_LOGW(TAG, "Ticker is already stopped");
-        return;
+void Ticker::stop() {
+    if (running_ && timer_) {
+        esp_timer_stop(timer_);
+        running_ = false;
+        ESP_LOGI(TAG, "Ticker stopped");
     }
-
-    esp_err_t ret = esp_timer_stop(periodic_timer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to stop periodic timer, error: %s", esp_err_to_name(ret));
-        return;
-    }
-
-    this->ticker_running = false;
-    ESP_LOGI(TAG, "Ticker stopped");
 }
 
-EventBits_t ESP_TICKER::wait_for_ticks(void)
-{
-    return xEventGroupWaitBits(event_group, TASK_FLAG, pdTRUE, pdTRUE, portMAX_DELAY);
+EventBits_t Ticker::wait() {
+    if (!event_group_) {
+        ESP_LOGE(TAG, "wait() called but event group not created");
+        return 0;
+    }
+    return xEventGroupWaitBits(event_group_, bit_, pdTRUE, pdTRUE, portMAX_DELAY);
+}
+
+void Ticker::timerCallback(void* arg) {
+    Ticker* self = static_cast<Ticker*>(arg);
+    if (self && self->event_group_) {
+        xEventGroupSetBits(self->event_group_, self->bit_);
+    }
 }
