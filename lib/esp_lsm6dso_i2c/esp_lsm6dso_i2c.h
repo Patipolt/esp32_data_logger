@@ -64,6 +64,8 @@
 #define ODR_XL_416HZ            (0x06U<<4)
 #define ODR_XL_833HZ            (0x07U<<4)
 #define ODR_XL_1660HZ           (0x08U<<4)
+#define ODR_XL_3330HZ           (0x09U<<4)
+#define ODR_XL_6660HZ           (0x0AU<<4)
 #define ODR_XL_MASK             (0x0FU<<4)
 
 #define FS_XL_2G                (0x00U<<2)
@@ -82,6 +84,8 @@
 #define ODR_G_416HZ             (0x06U<<4)
 #define ODR_G_833HZ             (0x07U<<4)
 #define ODR_G_1660HZ            (0x08U<<4)
+#define ODR_G_3330HZ            (0x09U<<4)
+#define ODR_G_6660HZ            (0x0AU<<4)
 #define ODR_G_MASK              (0x0FU<<4)
 
 #define FS_G_250DPS             (0x00U<<2)

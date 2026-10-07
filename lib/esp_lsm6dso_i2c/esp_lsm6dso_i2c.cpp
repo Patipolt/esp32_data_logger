@@ -82,13 +82,13 @@ void LSM6DSO_I2C::setup()
     // Block data update and register address auto-increment for multi-byte reads
     writeRegister(CTRL3_C, BDU | IF_INC);
     safetyDelay();
-    // Accelerometer: 208 Hz, 2g
-    writeRegister(CTRL1_XL, ODR_XL_208HZ);
+    // Accelerometer: 416 Hz, 2g
+    writeRegister(CTRL1_XL, ODR_XL_416HZ);
     safetyDelay();
     setACCConfig(FS_XL_2G);
     safetyDelay();
-    // Gyroscope: 208 Hz, 250 dps
-    writeRegister(CTRL2_G, ODR_G_208HZ);
+    // Gyroscope: 416 Hz, 250 dps
+    writeRegister(CTRL2_G, ODR_G_416HZ);
     safetyDelay();
     setGYROConfig(FS_G_250DPS);
     safetyDelay();

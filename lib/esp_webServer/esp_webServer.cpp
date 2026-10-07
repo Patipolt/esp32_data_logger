@@ -32,7 +32,7 @@ async function tick(){
   }catch(e){
     document.getElementById('s').textContent='disconnected';
   }
-  setTimeout(tick,20);
+  setTimeout(tick,50);
 }
 tick();
 </script></body></html>)HTML";
