@@ -1,5 +1,6 @@
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -23,7 +24,7 @@ static WEB_SERVER web;
 static RGB_LED *rgb_led = nullptr;
 static Ticker ticker;
 
-const char *log_path = MOUNT_POINT "/imu_log.csv";
+static char log_path[64];
 char line[MAX_ENTRY_SIZE];
 int count = 0;
 
@@ -36,9 +37,11 @@ static ImuSample latest = {};
 // Runs on the HTTP server task
 static int imuJson(char *buf, size_t len, void *)
 {
+    const char *slash = strrchr(log_path, '/');
+    const char *logName = slash ? slash + 1 : log_path;
     return snprintf(buf, len,
-                    "{\"accX\":%.3f,\"accY\":%.3f,\"accZ\":%.3f,\"gyrX\":%.2f,\"gyrY\":%.2f,\"gyrZ\":%.2f}",
-                    latest.accX, latest.accY, latest.accZ, latest.gyrX, latest.gyrY, latest.gyrZ);
+                    "{\"log\":\"%s\",\"accX\":%.3f,\"accY\":%.3f,\"accZ\":%.3f,\"gyrX\":%.2f,\"gyrY\":%.2f,\"gyrZ\":%.2f}",
+                    logName, latest.accX, latest.accY, latest.accZ, latest.gyrX, latest.gyrY, latest.gyrZ);
 }
 
 bool setup()
@@ -69,6 +72,14 @@ bool setup()
         rgb_led->setPattern(RGB_COLOR_RED, RGB_PACE_BLINK_FAST);
         return false;
     }
+
+    // 8.3-safe names so this works without FAT long filename support
+    struct stat st;
+    for (int i = 1; i <= 9999; i++) {
+        snprintf(log_path, sizeof(log_path), MOUNT_POINT "/log%04d.csv", i);
+        if (stat(log_path, &st) != 0) break;
+    }
+    ESP_LOGI(TAG, "Logging to %s", log_path);
 
     rgb_led->setPattern(RGB_COLOR_GREEN, RGB_PACE_SOLID);
 
@@ -105,8 +116,8 @@ extern "C" void app_main()
             count = 0;
         }
 
-        // ESP_LOGI(TAG, "ACC: X=%.3f, Y=%.3f, Z=%.3f | GYR: X=%.2f, Y=%.2f, Z=%.2f, count=%d", accX, accY, accZ, gyrX, gyrY, gyrZ, count);
-        snprintf(line, sizeof(line), "%.3f,%.3f,%.3f,%.2f,%.2f,%.2f,%d\n", accX, accY, accZ, gyrX, gyrY, gyrZ, count);
+        // ESP_LOGI(TAG, "ACC: X=%.3f, Y=%.3f, Z=%.3f | GYR: X=%.2f, Y=%.2f, Z=%.2f, count=%d", accX, accY, accZ, gyrX, gyrY, gyrZ);
+        snprintf(line, sizeof(line), "%.3f,%.3f,%.3f,%.2f,%.2f,%.2f\n", accX, accY, accZ, gyrX, gyrY, gyrZ);
         esp_err_t write_result = sdCard->write(log_path, line);
         if (write_result != ESP_OK) {
             ESP_LOGE(TAG, "SD log write failed: %s", esp_err_to_name(write_result));
